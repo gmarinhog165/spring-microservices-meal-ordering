@@ -5,6 +5,7 @@ import com.example.inventoryservice.entity.Restaurant;
 import com.example.inventoryservice.repository.InventoryRepository;
 import com.example.inventoryservice.repository.MenuItemRepository;
 import com.example.inventoryservice.response.MenuInventoryResponse;
+import com.example.inventoryservice.response.QuantityResponse;
 import com.example.inventoryservice.response.RestaurantInventoryResponse;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
@@ -51,12 +52,12 @@ public class InventoryService {
                 .toList();
     }
 
-    public MenuInventoryResponse getMenuItemInventory(Long menuItemId) {
+    public QuantityResponse getMenuItemInventory(Long menuItemId) {
         MenuItem menuItem = menuItemRepository.findById(menuItemId).orElse(null);
         if (menuItem == null) {
             throw new IllegalArgumentException("Menu item not found");
         }
-        return MenuInventoryResponse.builder()
+        return QuantityResponse.builder()
                 .quantity(menuItem.getQuantity())
                 .build();
     }
@@ -71,7 +72,7 @@ public class InventoryService {
         }
         int updatedRows = menuItemRepository.decrementQuantity(menuItemId, ordered);
         if (updatedRows == 0) {
-            throw new IllegalStateException("Insufficient stock for menu item ID: " + menuItemId);
+            throw new IllegalStateException("Insufficient stock.");
         }
         log.info("Decremented quantity for menu item ID: {} by {}", menuItemId, ordered);
     }
