@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 @Data
 @Builder
@@ -15,5 +16,5 @@ public class ReceiptResponse {
     private Long user_id;
     private BigDecimal totalPrice;
     private Long restaurant_id;
-    private
+    private Map<String, Integer> productQuantities;
 }
