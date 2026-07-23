@@ -1,11 +1,11 @@
 CREATE TABLE orders (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     total_price DECIMAL(10, 2) NOT NULL,
     placed_at TIMESTAMP NOT NULL,
     user_id BIGINT NOT NULL,
     restaurant_id BIGINT NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (restaurant_id) REFERENCES restaurants(id)
+    FOREIGN KEY (user_id) REFERENCES customer(id),
+    FOREIGN KEY (restaurant_id) REFERENCES restaurant(id)
 );
 
 CREATE TABLE order_items (
