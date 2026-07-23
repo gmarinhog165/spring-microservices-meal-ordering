@@ -1,0 +1,1 @@
+INSERT INTO customer (name, email, address) VALUES ('Dummy Customer', 'dummy@example.com', '123 Dummy Street');

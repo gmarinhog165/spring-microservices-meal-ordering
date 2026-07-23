@@ -59,6 +59,8 @@ public class InventoryService {
         }
         return QuantityResponse.builder()
                 .quantity(menuItem.getQuantity())
+                .name(menuItem.getName())
+                .price(menuItem.getPrice())
                 .build();
     }
 

@@ -1,18 +1,14 @@
-package com.example.inventoryservice.response;
+package com.example.bookingservice.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-
 @Data
 @Builder
-@NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
 public class QuantityResponse {
     private int quantity;
-    private BigDecimal price;
-    private String name;
 }

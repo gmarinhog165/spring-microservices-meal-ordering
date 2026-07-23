@@ -1,4 +1,4 @@
-package com.example.inventoryservice.response;
+package com.example.bookingservice.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,8 +11,9 @@ import java.math.BigDecimal;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class QuantityResponse {
-    private int quantity;
-    private BigDecimal price;
-    private String name;
+public class ReceiptResponse {
+    private Long user_id;
+    private BigDecimal totalPrice;
+    private Long restaurant_id;
+    private
 }
