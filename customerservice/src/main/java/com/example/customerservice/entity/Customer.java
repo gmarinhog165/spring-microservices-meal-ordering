@@ -1,21 +1,23 @@
-package com.example.bookingservice.entity;
+package com.example.customerservice.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Entity
-@AllArgsConstructor
-@NoArgsConstructor
 @Builder
-@Table(name = "customer")
+@NoArgsConstructor
+@AllArgsConstructor
 public class Customer {
-    @Id
-    private Long id;
-    private String name;
+    @Column(unique = true)
     private String email;
     private String address;
+    private String name;
+    @Id
+    private UUID keycloakId;
 }
