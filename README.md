@@ -7,6 +7,7 @@ A food ordering platform built as a set of independent Spring Boot microservices
 ![Spring Security](https://img.shields.io/badge/Spring_Security-6DB33F?style=for-the-badge&logo=springsecurity&logoColor=white)
 ![Spring Cloud Gateway](https://img.shields.io/badge/Spring_Cloud_Gateway-6DB33F?style=for-the-badge&logo=spring&logoColor=white)
 ![Resilience4j](https://img.shields.io/badge/Resilience4j-6A1B9A?style=for-the-badge)
+![OpenAPI](https://img.shields.io/badge/OpenAPI-6BA539?style=for-the-badge&logo=openapiinitiative&logoColor=white)
 ![Apache Kafka](https://img.shields.io/badge/Apache_Kafka-231F20?style=for-the-badge&logo=apachekafka&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Keycloak](https://img.shields.io/badge/Keycloak-4D4D4D?style=for-the-badge&logo=keycloak&logoColor=white)
@@ -38,6 +39,7 @@ A food ordering platform built as a set of independent Spring Boot microservices
 - **Language & runtime** — Java 21, Gradle (Kotlin DSL)
 - **Framework** — Spring Boot 4.1.0, Spring Cloud Gateway (WebMVC) 2025.1.2
 - **Resilience** — Resilience4j circuit breakers on every gateway route, with dedicated fallback responses
+- **API documentation** — springdoc-openapi (OpenAPI 3), aggregated into a single Swagger UI on the gateway
 - **Security** — Spring Security, OAuth2 Resource Server (JWT validation), Keycloak 24 as the identity provider
 - **Messaging** — Apache Kafka (Confluent Platform 7.5.0), Spring Kafka, Confluent Schema Registry
 - **Persistence** — PostgreSQL, Spring Data JPA, Flyway migrations
@@ -96,6 +98,14 @@ Start them in this rough order: `customerservice`, `inventoryservice`, `auth-ser
 Every downstream route in `api-gateway` (`auth-service`, `bookingservice`, `inventoryservice`) is wrapped in a named Resilience4j circuit breaker. On failure, the gateway forwards to a service-specific fallback route (`/fallbackRoute/auth`, `/fallbackRoute/booking`, `/fallbackRoute/inventory`) that returns a `503` with a clear message instead of a raw error. Live breaker state is available at `http://localhost:5000/actuator/circuitbreakers`.
 
 Note: those fallback routes are internal forwards, so they pass back through Spring Security — they're explicitly `permitAll` in `SecurityConfig` alongside `/api/v1/auth/**`, otherwise an unauthenticated caller would get a `401` instead of the fallback response.
+
+## API documentation (OpenAPI / Swagger)
+
+`auth-service`, `bookingservice`, and `inventoryservice` each expose an OpenAPI spec at `/v3/api-docs` via springdoc-openapi. `api-gateway` proxies each of these through a dedicated route (`ApiDocsRoutes`) at `/api-docs/{service}` and aggregates them into a single Swagger UI, listed under `springdoc.swagger-ui.urls`.
+
+Open http://localhost:5000/swagger-ui.html and pick a service from the dropdown to browse its endpoints.
+
+Note: like the circuit-breaker fallback routes, `/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**`, and `/api-docs/**` are `permitAll` in `SecurityConfig`, since these requests aren't authenticated.
 
 ## Inspecting Kafka via kafka-ui
 
