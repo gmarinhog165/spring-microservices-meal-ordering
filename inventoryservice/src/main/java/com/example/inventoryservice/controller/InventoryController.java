@@ -37,13 +37,6 @@ public class InventoryController {
         return inventoryService.getMenuItemInventory(menuItemId);
     }
 
-    @PutMapping("/quantity/{menu_item_id}")
-    public ResponseEntity<Void> updateMenuItemQuantity(@PathVariable("menu_item_id") Long menuItemId, @RequestBody QuantityRequest quantityRequest) {
-        int ordered = quantityRequest.getQuantity();
-        inventoryService.updateMenuItemQuantity(menuItemId, ordered);
-        return ResponseEntity.ok().build();
-    }
-
     @ExceptionHandler
     public ResponseEntity<String> handleIllegalArgumentException(IllegalArgumentException e) {
         return ResponseEntity.badRequest().body(e.getMessage());

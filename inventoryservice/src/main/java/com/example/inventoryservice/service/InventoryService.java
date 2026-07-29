@@ -63,19 +63,4 @@ public class InventoryService {
                 .price(menuItem.getPrice())
                 .build();
     }
-
-    @Transactional
-    public void updateMenuItemQuantity(Long menuItemId, Integer ordered) {
-        if (ordered == null || ordered <= 0) {
-            throw new IllegalArgumentException("Ordered amount must be positive");
-        }
-        if (!menuItemRepository.existsById(menuItemId)) {
-            throw new IllegalArgumentException("Menu item not found");
-        }
-        int updatedRows = menuItemRepository.decrementQuantity(menuItemId, ordered);
-        if (updatedRows == 0) {
-            throw new IllegalStateException("Insufficient stock.");
-        }
-        log.info("Decremented quantity for menu item ID: {} by {}", menuItemId, ordered);
-    }
 }
