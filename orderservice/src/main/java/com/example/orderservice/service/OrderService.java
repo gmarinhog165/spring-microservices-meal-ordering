@@ -1,8 +1,8 @@
 package com.example.orderservice.service;
 
 import com.example.bookingservice.event.BookingEvent;
-import com.example.orderservice.client.InventoryServiceClient;
 import com.example.orderservice.entity.Order;
+import com.example.orderservice.grpc.InventoryServiceGrpcClient;
 import com.example.orderservice.repository.OrderRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,17 +15,24 @@ import java.util.Map;
 @Slf4j
 public class OrderService {
 
-    private OrderRepository orderRepository;
-    private InventoryServiceClient inventoryServiceClient;
+    private final OrderRepository orderRepository;
+    private final InventoryServiceGrpcClient inventoryServiceClient;
 
     @Autowired
-    public OrderService(OrderRepository orderRepository, InventoryServiceClient inventoryServiceClient) {
+    public OrderService(OrderRepository orderRepository, InventoryServiceGrpcClient inventoryServiceClient) {
         this.inventoryServiceClient = inventoryServiceClient;
         this.orderRepository = orderRepository;
     }
 
     public void createOrderFromEvent(BookingEvent bookingEvent) {
         log.info("Creating order from booking event: {}", bookingEvent);
+
+        // O inventario e' decrementado antes de persistir a order: se algum item
+        // nao tiver stock a chamada gRPC falha e nao fica nenhuma order gravada.
+        for (Map.Entry<Long, Integer> entry : bookingEvent.getProductQuantities().entrySet()) {
+            inventoryServiceClient.updateInventory(entry.getKey(), entry.getValue());
+        }
+
         Order order = Order.builder()
                 .total_price(bookingEvent.getTotalPrice())
                 .placedAt(LocalDateTime.now())
@@ -33,13 +40,7 @@ public class OrderService {
                 .restaurant_id(bookingEvent.getRestaurant_id())
                 .product_quantities(bookingEvent.getProductQuantities())
                 .build();
-        log.info("Order created successfully: {}", order);
         orderRepository.save(order);
-
-        // Update inventory for each product in the order
-        for (Map.Entry<Long, Integer> entry : bookingEvent.getProductQuantities().entrySet()) {
-            log.info("Updating inventory for item_id: {}, quantity: {}", entry.getKey(), entry.getValue());
-            inventoryServiceClient.updateInventory(entry.getKey(), entry.getValue());
-        }
+        log.info("Order created successfully: {}", order);
     }
 }

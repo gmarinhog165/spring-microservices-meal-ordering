@@ -1,0 +1,6 @@
+GRPC localhost:9090/InventoryService/UpdateInventory
+
+{
+  "productId": 1,
+  "quantity": 5
+}
