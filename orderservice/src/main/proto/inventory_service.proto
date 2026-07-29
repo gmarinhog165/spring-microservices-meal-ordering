@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+option java_multiple_files = true;
+option java_package = "com.example.inventory";
+
+service InventoryService {
+  rpc GetInventory (GetInventoryRequest) returns (GetInventoryResponse);
+  rpc UpdateInventory (UpdateInventoryRequest) returns (google.protobuf.Empty);
+}
+
+message UpdateInventoryRequest {
+  int64 product_id = 1;
+  int32 quantity = 2;
+}
+
+message GetInventoryRequest {
+  int64 product_id = 1;
+}
+
+message GetInventoryResponse {
+  int64 product_id = 1;
+  int32 quantity = 2;
+  string name = 3;
+  // Monetary value kept as string to preserve BigDecimal precision.
+  string price = 4;
+}
