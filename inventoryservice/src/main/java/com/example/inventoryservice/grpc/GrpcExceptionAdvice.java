@@ -11,8 +11,8 @@ import net.devh.boot.grpc.server.advice.GrpcExceptionHandler;
 @Slf4j
 public class GrpcExceptionAdvice {
 
-    @GrpcExceptionHandler({IllegalArgumentException.class, NumberFormatException.class})
-    public StatusRuntimeException handleInvalidArgument(RuntimeException e) {
+    @GrpcExceptionHandler(IllegalArgumentException.class)
+    public StatusRuntimeException handleInvalidArgument(IllegalArgumentException e) {
         log.error("Invalid argument: {}", e.getMessage());
         return Status.INVALID_ARGUMENT.withDescription(e.getMessage()).asRuntimeException();
     }

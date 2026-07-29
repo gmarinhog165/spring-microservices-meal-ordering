@@ -1,0 +1,5 @@
+GRPC localhost:9090/InventoryService/GetInventory
+
+{
+  "productId": 1
+}

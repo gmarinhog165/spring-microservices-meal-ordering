@@ -5,12 +5,12 @@ import com.example.inventoryservice.entity.Restaurant;
 import com.example.inventoryservice.repository.InventoryRepository;
 import com.example.inventoryservice.repository.MenuItemRepository;
 import com.example.inventoryservice.response.MenuInventoryResponse;
-import com.example.inventoryservice.response.QuantityResponse;
 import com.example.inventoryservice.response.RestaurantInventoryResponse;
-import jakarta.transaction.Transactional;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -52,15 +52,22 @@ public class InventoryService {
                 .toList();
     }
 
-    public QuantityResponse getMenuItemInventory(Long menuItemId) {
-        MenuItem menuItem = menuItemRepository.findById(menuItemId).orElse(null);
-        if (menuItem == null) {
-            throw new IllegalArgumentException("Menu item not found");
+    public MenuItem getMenuItem(Long menuItemId) {
+        return menuItemRepository.findById(menuItemId)
+                .orElseThrow(() -> new EntityNotFoundException("Menu item not found: " + menuItemId));
+    }
+
+    @Transactional
+    public void decrementMenuItemQuantity(Long menuItemId, int ordered) {
+        if (ordered <= 0) {
+            throw new IllegalArgumentException("Ordered amount must be positive");
         }
-        return QuantityResponse.builder()
-                .quantity(menuItem.getQuantity())
-                .name(menuItem.getName())
-                .price(menuItem.getPrice())
-                .build();
+        if (!menuItemRepository.existsById(menuItemId)) {
+            throw new EntityNotFoundException("Menu item not found: " + menuItemId);
+        }
+        if (menuItemRepository.decrementQuantity(menuItemId, ordered) == 0) {
+            throw new IllegalStateException("Insufficient stock for menu item " + menuItemId);
+        }
+        log.info("Decremented quantity for menu item ID: {} by {}", menuItemId, ordered);
     }
 }

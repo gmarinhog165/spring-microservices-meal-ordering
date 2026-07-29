@@ -1,8 +1,6 @@
 package com.example.inventoryservice.controller;
 
-import com.example.inventoryservice.request.QuantityRequest;
 import com.example.inventoryservice.response.MenuInventoryResponse;
-import com.example.inventoryservice.response.QuantityResponse;
 import com.example.inventoryservice.response.RestaurantInventoryResponse;
 import com.example.inventoryservice.service.InventoryService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,11 +28,6 @@ public class InventoryController {
     @GetMapping("/{restaurant_id}/menu")
     public @ResponseBody List<MenuInventoryResponse> inventoryGetRestaurantMenu(@PathVariable("restaurant_id") Long restaurantId) {
         return inventoryService.getRestaurantMenu(restaurantId);
-    }
-
-    @GetMapping("/{menu_item_id}")
-    public  @ResponseBody QuantityResponse inventoryGetRestaurantMenuItemQuantity(@PathVariable("menu_item_id") Long menuItemId) {
-        return inventoryService.getMenuItemInventory(menuItemId);
     }
 
     @ExceptionHandler

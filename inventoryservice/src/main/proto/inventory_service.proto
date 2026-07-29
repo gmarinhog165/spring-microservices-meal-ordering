@@ -11,17 +11,18 @@ service InventoryService {
 }
 
 message UpdateInventoryRequest {
-  string product_id = 1;
-  string quantity = 2;
+  int64 product_id = 1;
+  int32 quantity = 2;
 }
 
 message GetInventoryRequest {
-  string product_id = 1;
+  int64 product_id = 1;
 }
 
 message GetInventoryResponse {
-  string product_id = 1;
-  string quantity = 2;
+  int64 product_id = 1;
+  int32 quantity = 2;
   string name = 3;
+  // Monetary value kept as string to preserve BigDecimal precision.
   string price = 4;
 }
