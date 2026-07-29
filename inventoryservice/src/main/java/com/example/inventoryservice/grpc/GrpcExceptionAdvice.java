@@ -13,20 +13,27 @@ public class GrpcExceptionAdvice {
 
     @GrpcExceptionHandler(IllegalArgumentException.class)
     public StatusRuntimeException handleInvalidArgument(IllegalArgumentException e) {
-        log.error("Invalid argument: {}", e.getMessage());
+        log.warn("Invalid argument: {}", e.getMessage());
         return Status.INVALID_ARGUMENT.withDescription(e.getMessage()).asRuntimeException();
     }
 
     @GrpcExceptionHandler(EntityNotFoundException.class)
     public StatusRuntimeException handleNotFound(EntityNotFoundException e) {
-        log.error("Entity not found: {}", e.getMessage());
-
+        log.warn("Entity not found: {}", e.getMessage());
         return Status.NOT_FOUND.withDescription(e.getMessage()).asRuntimeException();
     }
 
     @GrpcExceptionHandler(IllegalStateException.class)
     public StatusRuntimeException handleConflict(IllegalStateException e) {
-        log.error("Conflict: {}", e.getMessage());
+        log.warn("Conflict: {}", e.getMessage());
         return Status.FAILED_PRECONDITION.withDescription(e.getMessage()).asRuntimeException();
+    }
+
+    // Fallback: sem isto qualquer excecao nao mapeada saia como UNKNOWN.
+    // A mensagem original fica so' no log, nunca vai para o cliente.
+    @GrpcExceptionHandler(Exception.class)
+    public StatusRuntimeException handleUnexpected(Exception e) {
+        log.error("Unexpected error handling gRPC call", e);
+        return Status.INTERNAL.withDescription("Internal server error").asRuntimeException();
     }
 }
