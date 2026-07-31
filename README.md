@@ -53,48 +53,72 @@ A food ordering platform built as a set of independent Spring Boot microservices
 
 ### Prerequisites
 - Docker & Docker Compose
-- JDK 21
+- JDK 21 — only if you want to run a service outside Docker
 - (Optional) Gradle — each service ships the wrapper, so `./gradlew` is enough
 
-### 1. Start the infrastructure
+### Run everything in Docker
 
 ```bash
-docker compose up -d
+cp .env.example .env      # then fill in the values
+docker compose up -d --build
 ```
 
-This brings up PostgreSQL (app DB + a separate Keycloak DB), Zookeeper, a Kafka broker, Schema Registry, kafka-ui and Keycloak.
+That builds the six service images and starts the whole system. The realm is imported
+automatically, Flyway creates the schema, and Compose sequences startup through the
+healthchecks — there are no manual steps.
+
+Only the gateway is published; the downstream services have no authentication of their
+own and stay on the internal network.
+
+| Endpoint | URL |
+|---|---|
+| API gateway | http://localhost:5000 |
+| Swagger UI (aggregated) | http://localhost:5000/swagger-ui.html |
+| Circuit breaker state | http://localhost:5000/actuator/circuitbreakers |
+| Keycloak admin console | http://localhost:8090 (admin / admin) |
+| PostgreSQL (app) | localhost:5432 |
+
+kafka-ui and the Schema Registry are inspection tools rather than dependencies, so they
+sit behind a Compose profile:
+
+```bash
+docker compose --profile tools up -d
+```
 
 | Tool | URL |
 |---|---|
-| Keycloak admin console | http://localhost:8090 (admin / admin) |
 | kafka-ui | http://localhost:8084 |
 | Schema Registry | http://localhost:8083 |
-| PostgreSQL (app) | localhost:5432 |
 
-### 2. Configure Keycloak
+### Keycloak realm
 
-The realm isn't auto-imported — set it up once by hand in the admin console:
+The realm is imported from `docker/keycloak/realms/food-security-realm.json` on first
+start, so the setup that used to be done by hand in the admin console is now version
+controlled: the `auth-service` confidential client (direct access grants on, standard
+flow off, service accounts on) and its `realm-management` roles `manage-users` /
+`view-users`, which let it create and delete Keycloak users during registration.
 
-1. Log in at http://localhost:8090 with `admin` / `admin`.
-2. Create a realm named `food-security-realm`.
-3. Create a client:
-   - **Client ID**: `auth-service`
-   - **Client authentication**: On (confidential client)
-   - **Authentication flow**: enable *Direct access grants*, enable *Service accounts roles*, disable *Standard flow* (no browser login is used — `auth-service` talks to Keycloak's token endpoint directly)
-4. Under the `auth-service` client's **Service accounts roles** tab, assign the `realm-management` client roles `manage-users` and `view-users` — this lets `auth-service` create/delete Keycloak users via the Admin REST API during registration.
-5. Copy the generated **Client secret** (Credentials tab) into `auth-service/src/main/resources/application.properties` as `keycloak.client-secret`.
+The client secret is **not** in the JSON. It is a `${KEYCLOAK_CLIENT_SECRET}`
+placeholder that Keycloak substitutes from the environment at import time, so `.env` is
+what defines it. If you change it there, change `keycloak.client-secret` in
+`auth-service/src/main/resources/application.properties` to match, otherwise running
+that service from the IDE against this stack will fail to authenticate.
 
 With that in place, `auth-service` can register users (creates a Keycloak user + a `customerservice` profile, rolling back the Keycloak user if the profile creation fails) and log them in (password grant against Keycloak, returning a JWT that `api-gateway` validates on every downstream request).
 
-### 3. Run the services
+### Running a service from the IDE
 
-Each service is a standalone Spring Boot app:
+Every `application.properties` keeps `localhost` defaults, so `./gradlew bootRun` still
+works — Compose overrides the hosts with environment variables rather than changing the
+files. Start the infrastructure with `docker compose up -d postgres kafka-broker keycloak`,
+stop the service you are working on (`docker compose stop bookingservice`) and run it
+locally.
 
-```bash
-./gradlew bootRun   # run from inside each service's directory
-```
+One caveat: the token issuer is `http://keycloak:8080`, which does not resolve from the
+host. Add `127.0.0.1 keycloak` to `/etc/hosts` and publish Keycloak on `8080` if you
+need to run `api-gateway` or `auth-service` outside Docker.
 
-Start them in this rough order: `customerservice`, `inventoryservice`, `auth-service`, `bookingservice`, `orderservice`, `api-gateway`. `inventoryservice` needs to come before `bookingservice` and `orderservice` — both call it over gRPC and will fail with `UNAVAILABLE` if it isn't listening.
+If you run everything outside Docker, start them in this rough order: `customerservice`, `inventoryservice`, `auth-service`, `bookingservice`, `orderservice`, `api-gateway`. `inventoryservice` needs to come before `bookingservice` and `orderservice` — both call it over gRPC and will fail with `UNAVAILABLE` if it isn't listening.
 
 ## gRPC between services
 
@@ -144,17 +168,23 @@ Note: those fallback routes are internal forwards, so they pass back through Spr
 
 Open http://localhost:5000/swagger-ui.html and pick a service from the dropdown to browse its endpoints.
 
-Note: like the circuit-breaker fallback routes, `/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**`, and `/api-docs/**` are `permitAll` in `SecurityConfig`, since these requests aren't authenticated.
+Note: like the circuit-breaker fallback routes, `/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**`, and `/api-docs/**` are `permitAll` in `SecurityConfig`, since these requests aren't authenticated. `/actuator/**` is too, so that the container healthcheck (and, later, Kubernetes probes) don't get a `401` — in a real deployment actuator would move to a separate management port that isn't exposed.
 
 ## Inspecting Kafka via kafka-ui
 
-kafka-ui isn't customized beyond what's in `docker-compose.yaml` — it's wired to the local broker (`KAFKA_CLUSTERS_BOOTSTRAPSERVERS=kafka-broker:29092`) with dynamic config enabled. To watch events flow between `bookingservice` and `orderservice`:
+kafka-ui isn't customized beyond what's in `docker-compose.yaml` — it's wired to the local broker (`KAFKA_CLUSTERS_BOOTSTRAPSERVERS=kafka-broker:29092`) with dynamic config enabled. It sits behind the `tools` profile, so start it explicitly:
+
+```bash
+docker compose --profile tools up -d kafka-ui
+```
+
+To watch events flow between `bookingservice` and `orderservice`:
 
 1. Open http://localhost:8084.
 2. Go to **Topics** → `booking-events` to see the topic `bookingservice` publishes to and `orderservice` consumes from.
 3. Use **Messages** on that topic to inspect individual `BookingEvent` payloads as they're produced.
 
-Note: the Kafka broker has no persistent volume in this setup, so topics are recreated fresh (auto-created on first publish) every time the stack restarts — this is a local/dev setup, not meant to retain data across restarts.
+Note: `booking-events` is auto-created on first publish with a single partition, which caps how far `orderservice` can be scaled out — every replica joins the same consumer group, and a partition is assigned to exactly one consumer.
 
 ## Notes
 
