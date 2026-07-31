@@ -72,9 +72,12 @@ services:
       start_period: 20s
     networks: [foodordering-net]
 
+  # kafka-ui e schema-registry sao ferramentas de inspecao, nao dependencias da
+  # app. Ficam fora do `up` normal: `docker compose --profile tools up -d`.
   kafka-ui:
     container_name: kafka-ui
     image: provectuslabs/kafka-ui:v0.7.2
+    profiles: [tools]
     ports:
       - "8084:8080"
     depends_on:
@@ -90,6 +93,7 @@ services:
     image: confluentinc/cp-schema-registry:7.5.0
     hostname: kafka-schema-registry
     container_name: kafka-schema-registry
+    profiles: [tools]
     depends_on:
       kafka-broker:
         condition: service_healthy
@@ -156,6 +160,155 @@ services:
       timeout: 5s
       retries: 20
       start_period: 20s
+    networks: [foodordering-net]
+
+  # ------------------------------------------------------------- serviços ---
+  #
+  # Sem `container_name` para que `docker compose up --scale <svc>=N` funcione.
+  # `mem_limit` + MaxRAMPercentage sao o equivalente local aos
+  # resources.requests/limits do k8s — ver docs/deployment.md.
+
+  inventoryservice:
+    build: ./inventoryservice
+    image: ${REGISTRY:-foodordering}/inventoryservice:${TAG:-local}
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    mem_limit: 512m
+    networks: [foodordering-net]
+
+  customerservice:
+    build: ./customerservice
+    image: ${REGISTRY:-foodordering}/customerservice:${TAG:-local}
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
+    depends_on:
+      # O Flyway do inventoryservice cria as tabelas de toda a gente.
+      inventoryservice:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8079/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    mem_limit: 512m
+    networks: [foodordering-net]
+
+  auth-service:
+    build: ./auth-service
+    image: ${REGISTRY:-foodordering}/auth-service:${TAG:-local}
+    environment:
+      KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/food-security-realm/protocol/openid-connect/token
+      KEYCLOAK_ADMIN_USERS_URI: http://keycloak:8080/admin/realms/food-security-realm/users
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      CUSTOMER_SERVICE_URL: http://customerservice:8079/api/v1/customer
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      customerservice:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    mem_limit: 512m
+    networks: [foodordering-net]
+
+  bookingservice:
+    build: ./bookingservice
+    image: ${REGISTRY:-foodordering}/bookingservice:${TAG:-local}
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:29092
+      INVENTORY_SERVICE_ADDRESS: inventoryservice
+      INVENTORY_SERVICE_GRPC_PORT: "9090"
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
+    depends_on:
+      inventoryservice:
+        condition: service_healthy
+      kafka-broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    mem_limit: 512m
+    networks: [foodordering-net]
+
+  orderservice:
+    build: ./orderservice
+    image: ${REGISTRY:-foodordering}/orderservice:${TAG:-local}
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:29092
+      INVENTORY_SERVICE_ADDRESS: inventoryservice
+      INVENTORY_SERVICE_GRPC_PORT: "9090"
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
+    depends_on:
+      inventoryservice:
+        condition: service_healthy
+      kafka-broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    mem_limit: 512m
+    networks: [foodordering-net]
+
+  api-gateway:
+    build: ./api-gateway
+    image: ${REGISTRY:-foodordering}/api-gateway:${TAG:-local}
+    # Unico serviço exposto no host: os restantes nao tem seguranca propria.
+    ports:
+      - "5000:5000"
+    environment:
+      # Tem de coincidir com a claim `iss` dos tokens emitidos pelo auth-service.
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://keycloak:8080/realms/food-security-realm
+      SERVICES_AUTH_URL: http://auth-service:8086
+      SERVICES_BOOKING_URL: http://bookingservice:8081
+      SERVICES_INVENTORY_URL: http://inventoryservice:8080
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      bookingservice:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    mem_limit: 512m
     networks: [foodordering-net]
 
 networks:
