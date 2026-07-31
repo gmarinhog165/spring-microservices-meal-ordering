@@ -1,16 +1,33 @@
+## Stack local completo: infraestrutura + os seis microservices.
+##
+## Credenciais e tags vêm do .env (ver .env.example).
+## Só o api-gateway e as UIs de infraestrutura publicam portas no host — os
+## serviços a jusante não têm segurança própria e falam entre si pela rede
+## interna, resolvendo-se pelo nome do serviço via DNS do Docker.
+
+name: foodordering
+
 services:
+
+  # ---------------------------------------------------------------- infra ---
+
   postgres:
-    image: postgres:latest
+    image: postgres:18
     container_name: shop-postgres
     environment:
-      POSTGRES_DB: foodordering
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data2
-
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [foodordering-net]
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -21,6 +38,14 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 3000
+      # O `ruok` do healthcheck está fora da whitelist por omissão desde o ZooKeeper 3.5.
+      KAFKA_OPTS: -Dzookeeper.4lw.commands.whitelist=ruok
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc -w 2 localhost 2181 | grep -q imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [foodordering-net]
 
   kafka-broker:
     image: confluentinc/cp-kafka:7.5.0
@@ -29,50 +54,70 @@ services:
       - "9092:9092"
       - "29092:29092"
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:29092,PLAINTEXT_HOST://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:29092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 20s
+    networks: [foodordering-net]
+
   kafka-ui:
     container_name: kafka-ui
-    image: provectuslabs/kafka-ui:latest
+    image: provectuslabs/kafka-ui:v0.7.2
     ports:
       - "8084:8080"
     depends_on:
-      - kafka-broker
+      kafka-broker:
+        condition: service_healthy
     environment:
       KAFKA_CLUSTERS_NAME: local
       KAFKA_CLUSTERS_BOOTSTRAPSERVERS: kafka-broker:29092
       DYNAMIC_CONFIG_ENABLED: 'true'
+    networks: [foodordering-net]
 
   kafka-schema-registry:
     image: confluentinc/cp-schema-registry:7.5.0
     hostname: kafka-schema-registry
     container_name: kafka-schema-registry
     depends_on:
-      - kafka-broker
+      kafka-broker:
+        condition: service_healthy
     ports:
       - "8083:8081"
     environment:
       SCHEMA_REGISTRY_HOST_NAME: kafka-schema-registry
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka-broker:29092'
       SCHEMA_REGISTRY_LISTENERS: http://kafka-schema-registry:8081
+    networks: [foodordering-net]
 
   keycloak-db:
-    image: postgres:latest
+    image: postgres:18
     container_name: keycloak-db
     environment:
-      POSTGRES_DB: keycloak
-      POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${KEYCLOAK_DB}
+      POSTGRES_USER: ${KEYCLOAK_DB_USER}
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
     ports:
       - "5433:5432"
     volumes:
-      - keycloak-data:/var/lib/postgresql/data2
+      - keycloak-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KEYCLOAK_DB_USER} -d ${KEYCLOAK_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [foodordering-net]
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.1
@@ -80,18 +125,44 @@ services:
     command: start-dev --import-realm
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: password
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/${KEYCLOAK_DB}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # O emissor canónico é o URL interno: é o valor que fica na claim `iss`
+      # dos tokens. auth-service emite e api-gateway valida contra o MESMO
+      # URL, resolúvel dentro da rede — se divergirem, tudo dá 401.
+      # O standard flow está desligado no realm (só direct access grant via
+      # auth-service), por isso nenhum browser precisa de chegar ao emissor.
+      KC_HOSTNAME_URL: http://keycloak:8080
+      # A consola de administração continua acessível do host.
+      KC_HOSTNAME_ADMIN_URL: http://localhost:8090
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      # Consumidos pelos placeholders ${...} do realm importado.
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      KEYCLOAK_FOOD_CLIENT_SECRET: ${KEYCLOAK_FOOD_CLIENT_SECRET}
     ports:
       - "8090:8080"
     volumes:
-      - ./docker/keycloak/realms/:/opt/keycloak/data/import/
+      - ./docker/keycloak/realms/:/opt/keycloak/data/import/:ro
     depends_on:
-      - keycloak-db
+      keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /realms/food-security-realm HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks: [foodordering-net]
+
+networks:
+  foodordering-net:
+    driver: bridge
 
 volumes:
   postgres-data:
   keycloak-data:
+  kafka-data:

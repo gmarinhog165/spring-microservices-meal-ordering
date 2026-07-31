@@ -7,3 +7,12 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Gradle ###
+build/
+.gradle/
+
+### Docker ###
+.env
+docker-compose.override.yaml
+docker-compose.override.yml
