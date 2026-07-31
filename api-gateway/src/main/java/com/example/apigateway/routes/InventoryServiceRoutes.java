@@ -1,5 +1,6 @@
 package com.example.apigateway.routes;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.server.mvc.filter.CircuitBreakerFilterFunctions;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,11 +19,14 @@ import static org.springframework.cloud.gateway.server.mvc.handler.HandlerFuncti
 @Configuration
 public class InventoryServiceRoutes {
 
+    @Value("${services.inventory.url}")
+    private String inventoryUrl;
+
     @Bean
     public RouterFunction<ServerResponse> inventoryRoutes() {
         return route("inventory-service")
                 .route(RequestPredicates.path("api/v1/inventory/**"), http())
-                .before(uri("http://localhost:8080"))
+                .before(uri(inventoryUrl))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker("inventory-circuit-breaker", URI.create("forward:/fallbackRoute/inventory")))
                 .build();
     }
@@ -41,7 +45,7 @@ public class InventoryServiceRoutes {
 //    public RouterFunction<ServerResponse> inventoryRoutes() {
 //        return route("inventory-service")
 //                .route(RequestPredicates.path("/inventory/**"), http())
-//                .before(uri("http://localhost:8080"))
+//                .before(uri(inventoryUrl))
 //                .before(rewritePath("/inventory/(?<segment>.*)", "/api/v1/inventory/${segment}"))
 //                .build();
 //    }

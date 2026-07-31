@@ -20,6 +20,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/fallbackRoute/**").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/api-docs/**").permitAll()
+                        // Sem isto o healthcheck do Docker (e as probes do k8s) apanham 401.
+                        // Num deployment a serio o actuator vai para uma porta de gestao
+                        // separada (management.server.port), fora do Ingress.
+                        .requestMatchers("/actuator/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

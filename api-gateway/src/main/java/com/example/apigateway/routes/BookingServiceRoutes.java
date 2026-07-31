@@ -1,5 +1,6 @@
 package com.example.apigateway.routes;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.server.mvc.filter.CircuitBreakerFilterFunctions;
 import org.springframework.cloud.gateway.server.mvc.filter.FilterFunctions;
 import org.springframework.cloud.gateway.server.mvc.handler.GatewayRouterFunctions;
@@ -20,11 +21,14 @@ import static org.springframework.cloud.gateway.server.mvc.handler.HandlerFuncti
 @Configuration
 public class BookingServiceRoutes {
 
+    @Value("${services.booking.url}")
+    private String bookingUrl;
+
     @Bean
     public RouterFunction<ServerResponse> bookingRoutes() {
         return route("booking-service")
                 .route(RequestPredicates.path("api/v1/booking/**"), http())
-                .before(uri("http://localhost:8081"))
+                .before(uri(bookingUrl))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker("booking-circuit-breaker", URI.create("forward:/fallbackRoute/booking")))
                 .build();
     }
