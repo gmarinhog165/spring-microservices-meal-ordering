@@ -1,5 +1,6 @@
 package com.example.apigateway.routes;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.function.RequestPredicates;
@@ -14,11 +15,20 @@ import static org.springframework.cloud.gateway.server.mvc.handler.HandlerFuncti
 @Configuration
 public class ApiDocsRoutes {
 
+    @Value("${services.booking.url}")
+    private String bookingUrl;
+
+    @Value("${services.inventory.url}")
+    private String inventoryUrl;
+
+    @Value("${services.auth.url}")
+    private String authUrl;
+
     @Bean
     public RouterFunction<ServerResponse> bookingApiDocsRoute() {
         return route("booking-service-docs")
                 .route(RequestPredicates.path("/api-docs/booking/**"), http())
-                .before(uri("http://localhost:8081"))
+                .before(uri(bookingUrl))
                 .before(setPath("/v3/api-docs"))
                 .build();
     }
@@ -27,7 +37,7 @@ public class ApiDocsRoutes {
     public RouterFunction<ServerResponse> inventoryApiDocsRoute() {
         return route("inventory-service-docs")
                 .route(RequestPredicates.path("/api-docs/inventory/**"), http())
-                .before(uri("http://localhost:8080"))
+                .before(uri(inventoryUrl))
                 .before(setPath("/v3/api-docs"))
                 .build();
     }
@@ -36,7 +46,7 @@ public class ApiDocsRoutes {
     public RouterFunction<ServerResponse> authApiDocsRoute() {
         return route("auth-service-docs")
                 .route(RequestPredicates.path("/api-docs/auth/**"), http())
-                .before(uri("http://localhost:8086"))
+                .before(uri(authUrl))
                 .before(setPath("/v3/api-docs"))
                 .build();
     }

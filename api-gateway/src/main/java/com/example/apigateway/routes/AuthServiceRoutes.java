@@ -1,5 +1,6 @@
 package com.example.apigateway.routes;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.server.mvc.filter.CircuitBreakerFilterFunctions;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,11 +18,14 @@ import static org.springframework.cloud.gateway.server.mvc.handler.HandlerFuncti
 @Configuration
 public class AuthServiceRoutes {
 
+    @Value("${services.auth.url}")
+    private String authUrl;
+
     @Bean
     public RouterFunction<ServerResponse> authRoutes() {
         return route("auth-service")
                 .route(RequestPredicates.path("api/v1/auth/**"), http())
-                .before(uri("http://localhost:8086"))
+                .before(uri(authUrl))
                 .filter(CircuitBreakerFilterFunctions.circuitBreaker("auth-circuit-breaker", URI.create("forward:/fallbackRoute/auth")))
                 .build();
     }
